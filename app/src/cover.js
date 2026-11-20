@@ -1,35 +1,68 @@
-// Draws the cover: the photo filling the square, a sunset tint rising from the bottom, and the caption in bold
-// white capitals along the foot.
+// Draws the whole cover: panel frames, the photos cropped into them, the sunset grade and the caption.
 
-/** Draws `photo` (an image, or null) and `caption` onto the canvas's 2D context, at the canvas's own size. */
-export function drawCover(canvas, photo, caption) {
+import { drawPanelPhoto, drawSunsetGrade, drawScanlines, drawCaption, panelsFor } from './panels.js';
+
+/**
+ * Draws the cover onto `canvas`.
+ * `photos`   array of photo slots: { img: HTMLImageElement|null, dx, dy, zoom }
+ * `caption`  the big caption, `tagline` the small line under it
+ * `selected` index of the panel being edited, or -1 (draws a highlight ring on it)
+ */
+export function drawCover(canvas, photos, caption, tagline, selected = -1) {
   const ctx = canvas.getContext('2d');
-  const { width: w, height: h } = canvas;
-  ctx.fillStyle = '#2b1838';
+  const w = canvas.width;
+  const h = canvas.height;
+  const count = Math.max(1, photos.length);
+  const panels = panelsFor(count, w, h);
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#1a0b2e';
   ctx.fillRect(0, 0, w, h);
-  if (photo) {
-    const scale = Math.max(w / photo.naturalWidth, h / photo.naturalHeight);
-    const pw = photo.naturalWidth * scale;
-    const ph = photo.naturalHeight * scale;
-    ctx.drawImage(photo, (w - pw) / 2, (h - ph) / 2, pw, ph);
-  }
-  const tint = ctx.createLinearGradient(0, h * 0.35, 0, h);
-  tint.addColorStop(0, 'rgba(255, 120, 80, 0)');
-  tint.addColorStop(1, 'rgba(200, 40, 120, 0.65)');
-  ctx.fillStyle = tint;
-  ctx.fillRect(0, 0, w, h);
-  const text = caption.trim().toUpperCase();
-  if (!text) return;
-  let size = h * 0.12;
-  ctx.font = `bold ${size}px sans-serif`;
-  while (ctx.measureText(text).width > w * 0.9 && size > 12) {
-    size -= 2;
-    ctx.font = `bold ${size}px sans-serif`;
-  }
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-  ctx.shadowBlur = size * 0.2;
-  ctx.fillText(text, w / 2, h - h * 0.07);
-  ctx.shadowBlur = 0;
+
+  const gap = Math.max(4, Math.round(h * 0.012));
+
+  photos.forEach((slot, i) => {
+    const p = panels[i];
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(p.x, p.y, p.w, p.h);
+    ctx.clip();
+    if (slot.img) {
+      drawPanelPhoto(ctx, p, slot.img, slot.dx, slot.dy, slot.zoom);
+      ctx.translate(p.x, p.y);
+      drawSunsetGrade(ctx, p.w, p.h);
+    } else {
+      const g = ctx.createLinearGradient(p.x, p.y, p.x + p.w, p.y + p.h);
+      g.addColorStop(0, '#3a1354');
+      g.addColorStop(1, '#c2308a');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.font = `600 ${p.h * 0.09}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`Panel ${i + 1}`, p.x + p.w / 2, p.y + p.h / 2);
+    }
+    ctx.restore();
+    if (i === selected) {
+      ctx.save();
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = Math.max(3, h * 0.006);
+      ctx.strokeRect(p.x + ctx.lineWidth / 2, p.y + ctx.lineWidth / 2, p.w - ctx.lineWidth, p.h - ctx.lineWidth);
+      ctx.restore();
+    }
+  });
+
+  drawScanlines(ctx, w, h);
+  drawSunsetGrade(ctx, 0, 0, w, h);
+  drawCaption(ctx, w, h, caption, tagline);
+
+  // Thin neon frame around the whole cover.
+  ctx.strokeStyle = 'rgba(255, 90, 180, 0.8)';
+  ctx.lineWidth = Math.max(2, h * 0.004);
+  ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+  ctx.strokeStyle = 'rgba(90, 220, 255, 0.5)';
+  ctx.lineWidth = Math.max(1, h * 0.002);
+  ctx.strokeRect(gap / 2, gap / 2, w - gap, h - gap);
 }
